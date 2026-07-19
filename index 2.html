@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Three-Party Dependency Satisfaction Test</title>
+<style>
+*{box-sizing:border-box}
+:root{
+  --blue:#0b56b5;--ink:#111;--paper:#fff;--bg:#cfcfcf;
+  --a:#d9ead3;--b:#cfe2f3;--c:#fce5cd;--warn:#fff2cc;--bad:#f4cccc;
+}
+body{margin:0;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--ink);font-size:9px}
+.toolbar{position:sticky;top:0;z-index:100;background:#111;color:#fff;padding:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+button{font-weight:800;border:1px solid #111;border-radius:6px;background:#fff;padding:7px 10px;font-size:11px;cursor:pointer}
+.toolbar button{border-color:#fff}
+.page{width:8.5in;min-height:14in;margin:12px auto;background:#fff;padding:.24in .32in;border:2px solid #111;box-shadow:0 2px 10px #777;position:relative;page-break-after:always}
+@page{size:legal portrait;margin:.15in}
+@media print{
+ body{background:#fff}.toolbar,.no-print{display:none!important}
+ .page{margin:0!important;border:0!important;box-shadow:none!important;width:8.5in!important;height:13.35in!important;min-height:0!important;overflow:hidden!important;break-after:page;page-break-after:always}
+ .page:last-of-type{break-after:auto;page-break-after:auto}
+}
+.marks:before,.marks:after{content:"";position:absolute;top:.08in;bottom:.08in;width:.06in;background:repeating-linear-gradient(to bottom,#111 0 .05in,transparent .05in,transparent .14in)}
+.marks:before{left:.06in}.marks:after{right:.06in}
+.top{display:grid;grid-template-columns:.78in 1fr 1.35in;gap:6px;align-items:start}
+.logo{width:.62in;height:.62in;border:3px solid #111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;margin:auto}
+h1{font-size:22px;line-height:.95;margin:0;text-align:center}
+.subtitle{text-align:center;font-weight:800;font-size:8.5px}
+.idbox{border:1px solid #111;text-align:center;padding:4px;font-size:7.2px}
+.cells{display:flex;gap:1px;justify-content:center;margin:3px 0}.cell{width:10px;height:13px;border:1px solid #111}
+.bar{background:var(--blue);color:#fff;text-align:center;border-radius:4px;font-weight:900;padding:4px;margin:5px 0;font-size:10px}
+.box{border:1.2px solid #111;margin-bottom:5px;padding:5px}.box h2{font-size:10px;margin:0 0 4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:5px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.row{display:flex;gap:4px;align-items:center;margin:2px 0}
+input[type=text],textarea,select{border:0;border-bottom:1px solid #111;background:transparent;font:inherit;padding:2px}
+.row input,.row select{flex:1}textarea{width:100%;height:38px;border:1px solid #777;resize:vertical}
+.note{background:#fff7d6;border:1px solid #c9ac55;padding:5px}
+.scalehead,.scanrow{display:grid;grid-template-columns:2.65in repeat(3,.58in) .52in;gap:2px;align-items:center}
+.scalehead{font-size:7px;text-align:center;font-weight:900;background:#eee;border:1px solid #aaa;padding:2px}
+.scanrow{min-height:24px;border-bottom:1px solid #ddd}
+.scanrow:nth-child(even){background:#fafafa}
+.score{width:100%;border:1px solid #aaa;background:#fff;font-size:8px}
+.conf{width:100%;border:1px solid #aaa;background:#fff;font-size:8px}
+.levelTitle{background:#f1f1f1;border:1px solid #aaa;font-weight:900;padding:3px;margin-top:4px;font-size:8px}
+.tag{float:right;color:#555;font-size:6.5px}
+.badge{display:inline-block;border:1px solid #777;border-radius:10px;padding:1px 5px;font-size:6.5px;font-weight:800;margin-left:3px}
+.partyA{background:var(--a)}.partyB{background:var(--b)}.partyC{background:var(--c)}
+.footer{position:absolute;bottom:.07in;left:.32in;right:.32in;display:flex;justify-content:space-between;font-size:7px}
+.small{font-size:7px}.hidden{display:none!important}
+.metric{display:grid;grid-template-columns:1.65in .8in 1fr;gap:5px;border-bottom:1px solid #ccc;padding:4px 0;font-size:10px}
+.pill{border:1px solid #111;border-radius:12px;padding:3px 5px;text-align:center;font-weight:900}
+.good{background:var(--a)}.mid{background:var(--warn)}.poor{background:var(--bad)}
+.reportText{font-size:10px;line-height:1.35}
+.driverGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.driverCard{border:1px solid #999;padding:5px;background:#fafafa}.driverCard h3{font-size:9px;margin:0 0 3px}
+.smalltable{width:100%;border-collapse:collapse;font-size:8px}.smalltable td,.smalltable th{border:1px solid #999;padding:3px}
+.legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:4px 0}
+.legend span{border:1px solid #777;border-radius:10px;padding:2px 7px;font-weight:800}
+.codebox{width:100%;height:82px;font-family:monospace;font-size:7px;border:1px solid #777}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button onclick="window.print()">Print / Save PDF</button>
+  <button onclick="scoreAssessment()">Score Test</button>
+  <button onclick="createDataBlock()">Create Data Block</button>
+  <button onclick="importData()">Import Data</button>
+  <button onclick="clearAll()">Clear</button>
+  <span>Three-party satisfaction test · 60 nodes · Version 2.0</span>
+</div>
+
+<section class="page marks">
+  <div class="top">
+    <div><div class="logo">3P</div></div>
+    <div>
+      <h1>THREE-PARTY DEPENDENCY SATISFACTION TEST</h1>
+      <div class="subtitle">JOINT ASSESSMENT FOR YOU · THE OTHER PARTY · THIRD PARTIES</div>
+      <div class="subtitle">LEVELS: INFORMATION · INTELLIGENCE · POLICY · PROGRESS · RETENTION</div>
+    </div>
+    <div class="idbox">TEST ID<div class="cells"><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span></div>FORM 3P-60 / 2.0<br>PAGE 1 / 4</div>
+  </div>
+  <div class="bar">PARTICIPANT IDENTIFICATION AND SHARED DECISION</div>
+  <div class="grid2">
+    <div class="box">
+      <h2>A. DECISION CONTEXT</h2>
+      <div class="row">Chosen option:<input id="chosenOption" type="text"></div>
+      <div class="row">Decision / issue:<input id="decision" type="text"></div>
+      <div class="row">Time horizon:<input id="horizon" type="text" placeholder="today / 10 years"></div>
+      <textarea id="notes" placeholder="Neutral facts, constraints, and assumptions."></textarea>
+    </div>
+    <div class="box">
+      <h2>B. THREE PARTIES</h2>
+      <div class="row partyA">Party A — You:<input id="partyAName" type="text" placeholder="name or role"></div>
+      <div class="row partyB">Party B — Other party:<input id="partyBName" type="text" placeholder="person / employer / business"></div>
+      <div class="row partyC">Party C — Third parties:<input id="partyCName" type="text" placeholder="public / regulator / community"></div>
+      <div class="row">Facilitator:<input id="facilitator" type="text"></div>
+    </div>
+  </div>
+  <div class="box note">
+    <h2>C. INSTRUCTIONS</h2>
+    <p>For each node, each party rates how well the proposed arrangement satisfies their legitimate interests.</p>
+    <p><b>1</b> seriously harms interests · <b>2</b> mostly unsatisfactory · <b>3</b> mixed / acceptable · <b>4</b> mostly satisfactory · <b>5</b> strongly satisfactory.</p>
+    <p>Use <b>N/A</b> only when the node genuinely does not affect that party. Rate confidence from <b>1</b> (guessing) to <b>5</b> (very confident).</p>
+    <p>The goal is not to make every score identical. The goal is to identify balanced outcomes, unresolved conflicts, and nodes requiring negotiation or safeguards.</p>
+  </div>
+  <div class="legend">
+    <span class="partyA">PARTY A — YOU</span><span class="partyB">PARTY B — OTHER PARTY</span><span class="partyC">PARTY C — THIRD PARTIES</span>
+  </div>
+  <div class="box">
+    <h2>D. LEVEL 1 — INFORMATION (ITEMS 1–12)</h2>
+    <div class="scalehead"><b>NODE</b><b>A</b><b>B</b><b>C</b><b>CONF.</b></div>
+    <div id="level1"></div>
+  </div>
+  <div class="footer"><b>THREE-PARTY DEPENDENCY SATISFACTION TEST</b><span>PAGE 1 / 4</span></div>
+</section>
+
+<section class="page marks">
+  <div class="top"><div><div class="logo">3P</div></div><div><h1>THREE-PARTY DEPENDENCY SATISFACTION TEST</h1><div class="subtitle">LEVELS 2–3</div></div><div class="idbox">PAGE 2 / 4</div></div>
+  <div class="bar">JOINT SATISFACTION INVENTORY</div>
+  <div class="box">
+    <h2>E. LEVEL 2 — INTELLIGENCE (ITEMS 13–24)</h2>
+    <div class="scalehead"><b>NODE</b><b>A</b><b>B</b><b>C</b><b>CONF.</b></div>
+    <div id="level2"></div>
+  </div>
+  <div class="box">
+    <h2>F. LEVEL 3 — POLICY (ITEMS 25–36)</h2>
+    <div class="scalehead"><b>NODE</b><b>A</b><b>B</b><b>C</b><b>CONF.</b></div>
+    <div id="level3"></div>
+  </div>
+  <div class="footer"><b>FORM 3P-60 / 2.0</b><span>PAGE 2 / 4</span></div>
+</section>
+
+<section class="page marks">
+  <div class="top"><div><div class="logo">3P</div></div><div><h1>THREE-PARTY DEPENDENCY SATISFACTION TEST</h1><div class="subtitle">LEVELS 4–5</div></div><div class="idbox">PAGE 3 / 4</div></div>
+  <div class="bar">LONG-HORIZON PROGRESS AND RETENTION</div>
+  <div class="box">
+    <h2>G. LEVEL 4 — PROGRESS / 10 YEARS (ITEMS 37–48)</h2>
+    <div class="scalehead"><b>NODE</b><b>A</b><b>B</b><b>C</b><b>CONF.</b></div>
+    <div id="level4"></div>
+  </div>
+  <div class="box">
+    <h2>H. LEVEL 5 — RETENTION (ITEMS 49–60)</h2>
+    <div class="scalehead"><b>NODE</b><b>A</b><b>B</b><b>C</b><b>CONF.</b></div>
+    <div id="level5"></div>
+  </div>
+  <div class="box note">
+    <h2>I. NEGOTIATION CHECK</h2>
+    <div class="grid3">
+      <div><b>Party A minimum acceptable outcome</b><textarea id="minA"></textarea></div>
+      <div><b>Party B minimum acceptable outcome</b><textarea id="minB"></textarea></div>
+      <div><b>Party C minimum acceptable outcome</b><textarea id="minC"></textarea></div>
+    </div>
+    <div class="row">Safeguard or compromise all three can accept:<input id="compromise" type="text"></div>
+  </div>
+  <div class="footer"><b>FORM 3P-60 / 2.0</b><span>PAGE 3 / 4</span></div>
+</section>
+
+<section class="page marks" id="results-page">
+  <div class="top"><div><div class="logo">3P</div></div><div><h1>THREE-PARTY SATISFACTION REPORT</h1><div class="subtitle">BALANCE · CONSENSUS · CONFLICT · SAFEGUARDS</div></div><div class="idbox">PAGE 4 / 4</div></div>
+  <div class="bar">AUTOMATED SCORING SUMMARY</div>
+  <div class="box">
+    <h2>J. OVERALL METRICS</h2>
+    <div id="metrics" class="reportText">Complete the inventory, then press <b>Score Test</b>.</div>
+  </div>
+  <div class="box">
+    <h2>K. LEVEL-BY-LEVEL RESULTS</h2>
+    <div id="levelResults"></div>
+  </div>
+  <div class="box">
+    <h2>L. HIGHEST CONSENSUS AND CONFLICT NODES</h2>
+    <div id="drivers"></div>
+  </div>
+  <div class="box">
+    <h2>M. INTERPRETATION</h2>
+    <div id="interpretation" class="reportText">No score calculated yet.</div>
+  </div>
+  <div class="box no-print">
+    <h2>N. PORTABLE DATA BLOCK</h2>
+    <textarea id="dataBlock" class="codebox" placeholder="Use Create Data Block, or paste a saved block here and press Import Data."></textarea>
+  </div>
+  <div class="footer"><b>FORM 3P-60 / 2.0</b><span>PAGE 4 / 4</span></div>
+</section>
+
+<script>
+const MODEL = [{"ClockwisePosition": 5, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Connected", "NodeStatus": "Existing", "Success": 2, "Risk": 0, "ResourceCost": -1, "TimeImpact": 2, "Stability": 1, "FutureOptions": 3, "Total": 7, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 3, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Digital activity information", "NodeStatus": "Added", "Success": 2, "Risk": 0, "ResourceCost": 0, "TimeImpact": 2, "Stability": 1, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 12, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Employee information", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 8, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Friendship information", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 4, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Home data", "NodeStatus": "Added", "Success": 1, "Risk": -1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 0, "FutureOptions": 2, "Total": 3, "Classification": "Uncertain", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 4, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Triangle", "Node": "Home privacy", "NodeStatus": "Existing", "Success": 0, "Risk": -3, "ResourceCost": -1, "TimeImpact": 0, "Stability": -2, "FutureOptions": 1, "Total": -5, "Classification": "Poor", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 11, "Level": 1, "LevelTheme": "Information", "Shape": "Triangle", "Node": "ID", "NodeStatus": "Existing", "Success": 2, "Risk": 1, "ResourceCost": -1, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 6, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 6, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Location", "NodeStatus": "Existing", "Success": 1, "Risk": -1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 0, "FutureOptions": 2, "Total": 3, "Classification": "Uncertain", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 5, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Network presence", "NodeStatus": "Added", "Success": 2, "Risk": 0, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 6, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 10, "Level": 1, "LevelTheme": "Information", "Shape": "Triangle", "Node": "No ID", "NodeStatus": "Existing", "Success": -1, "Risk": -3, "ResourceCost": 0, "TimeImpact": -1, "Stability": -2, "FutureOptions": 0, "Total": -7, "Classification": "Poor", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 3, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Online participation", "NodeStatus": "Added", "Success": 2, "Risk": 0, "ResourceCost": -1, "TimeImpact": 2, "Stability": 1, "FutureOptions": 3, "Total": 7, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 2, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Workforce information", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "You control", "Colour": "Green", "Reason": "Direct personal decisions/actions"}, {"ClockwisePosition": 8, "Level": 5, "LevelTheme": "Retention", "Shape": "Circle", "Node": "Friend retention", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 2, "FutureOptions": 2, "Total": 8, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 3, "Level": 5, "LevelTheme": "Retention", "Shape": "Circle", "Node": "Long-term digital connection", "NodeStatus": "Added", "Success": 3, "Risk": 1, "ResourceCost": 0, "TimeImpact": 2, "Stability": 2, "FutureOptions": 3, "Total": 11, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 4, "Level": 5, "LevelTheme": "Retention", "Shape": "Circle", "Node": "Long-term household trust", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": 0, "TimeImpact": 1, "Stability": 3, "FutureOptions": 2, "Total": 10, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 7, "Level": 5, "LevelTheme": "Retention", "Shape": "Circle", "Node": "Long-term product adoption", "NodeStatus": "Added", "Success": 3, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 2, "FutureOptions": 3, "Total": 10, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 1, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Monitoring improvement", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": 1, "Stability": 2, "FutureOptions": 2, "Total": 8, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 5, "Level": 5, "LevelTheme": "Retention", "Shape": "Triangle", "Node": "Predictability", "NodeStatus": "Existing", "Success": -1, "Risk": -2, "ResourceCost": 0, "TimeImpact": -1, "Stability": -2, "FutureOptions": 1, "Total": -5, "Classification": "Poor", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 12, "Level": 5, "LevelTheme": "Retention", "Shape": "Triangle", "Node": "Progress", "NodeStatus": "Existing", "Success": 3, "Risk": 1, "ResourceCost": -1, "TimeImpact": 0, "Stability": 2, "FutureOptions": 3, "Total": 8, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 2, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Progression", "NodeStatus": "Existing", "Success": 3, "Risk": 1, "ResourceCost": -1, "TimeImpact": 0, "Stability": 2, "FutureOptions": 3, "Total": 8, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 11, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Representation progress", "NodeStatus": "Added", "Success": 3, "Risk": 1, "ResourceCost": -1, "TimeImpact": 0, "Stability": 2, "FutureOptions": 3, "Total": 8, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 2, "Level": 5, "LevelTheme": "Retention", "Shape": "Circle", "Node": "Retention", "NodeStatus": "Existing", "Success": 3, "Risk": 2, "ResourceCost": 1, "TimeImpact": 1, "Stability": 3, "FutureOptions": 2, "Total": 12, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 6, "Level": 5, "LevelTheme": "Retention", "Shape": "Square", "Node": "Same place random times", "NodeStatus": "Existing", "Success": 1, "Risk": -1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 1, "Total": 3, "Classification": "Uncertain", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 4, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Smart-home intelligence", "NodeStatus": "Added", "Success": 2, "Risk": 0, "ResourceCost": -2, "TimeImpact": 1, "Stability": 1, "FutureOptions": 3, "Total": 5, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 3, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Social media", "NodeStatus": "Existing", "Success": 1, "Risk": -2, "ResourceCost": 0, "TimeImpact": 2, "Stability": -1, "FutureOptions": 2, "Total": 2, "Classification": "Uncertain", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 5, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Traceable", "NodeStatus": "Existing", "Success": 1, "Risk": -2, "ResourceCost": 0, "TimeImpact": 1, "Stability": -1, "FutureOptions": 1, "Total": 0, "Classification": "Uncertain", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 8, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Trust building", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 2, "FutureOptions": 2, "Total": 8, "Classification": "Good", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 5, "Level": 3, "LevelTheme": "Policy", "Shape": "Circle", "Node": "Visible", "NodeStatus": "Existing", "Success": 1, "Risk": -2, "ResourceCost": 0, "TimeImpact": 1, "Stability": -1, "FutureOptions": 1, "Total": 0, "Classification": "Uncertain", "Control": "Shared control", "Colour": "Yellow", "Reason": "Depends on you and others"}, {"ClockwisePosition": 1, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Triangle", "Node": "Being watched", "NodeStatus": "Existing", "Success": 0, "Risk": -3, "ResourceCost": -1, "TimeImpact": 0, "Stability": -2, "FutureOptions": 0, "Total": -6, "Classification": "Poor", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 10, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Square", "Node": "Camera", "NodeStatus": "Existing", "Success": 1, "Risk": -2, "ResourceCost": -2, "TimeImpact": 1, "Stability": 0, "FutureOptions": 1, "Total": -1, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 12, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Career policy", "NodeStatus": "Added", "Success": 3, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 3, "Total": 8, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 9, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Case progression", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": -1, "TimeImpact": -1, "Stability": 1, "FutureOptions": 1, "Total": 3, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 8, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Community policy", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 2, "Total": 6, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 7, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Consumer availability", "NodeStatus": "Existing", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 9, "Level": 5, "LevelTheme": "Retention", "Shape": "Square", "Node": "Court", "NodeStatus": "Existing", "Success": 1, "Risk": 2, "ResourceCost": -2, "TimeImpact": -2, "Stability": 2, "FutureOptions": 1, "Total": 2, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 11, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Demographic intelligence", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": -1, "TimeImpact": 0, "Stability": 1, "FutureOptions": 2, "Total": 5, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 9, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Evidence intelligence", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": 0, "Stability": 2, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 2, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Triangle", "Node": "HQ", "NodeStatus": "Existing", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 2, "FutureOptions": 2, "Total": 8, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 10, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Identification policy", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 1, "Total": 5, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 9, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Incident information", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 1, "Total": 6, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 11, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Inclusion policy", "NodeStatus": "Added", "Success": 3, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 3, "Total": 8, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 1, "Level": 1, "LevelTheme": "Information", "Shape": "Square", "Node": "Industry", "NodeStatus": "Existing", "Success": 2, "Risk": 0, "ResourceCost": 0, "TimeImpact": 0, "Stability": 2, "FutureOptions": 2, "Total": 6, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 3, "Level": 3, "LevelTheme": "Policy", "Shape": "Square", "Node": "Internet", "NodeStatus": "Existing", "Success": 3, "Risk": 0, "ResourceCost": -1, "TimeImpact": 3, "Stability": 1, "FutureOptions": 3, "Total": 9, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 9, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Legal policy", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 1, "Total": 5, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 1, "Level": 5, "LevelTheme": "Retention", "Shape": "Square", "Node": "Long-term compliance", "NodeStatus": "Added", "Success": 2, "Risk": 3, "ResourceCost": 0, "TimeImpact": 1, "Stability": 3, "FutureOptions": 2, "Total": 11, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 11, "Level": 5, "LevelTheme": "Retention", "Shape": "Triangle", "Node": "Long-term girls", "NodeStatus": "Existing", "Success": 2, "Risk": 0, "ResourceCost": -1, "TimeImpact": 0, "Stability": 2, "FutureOptions": 3, "Total": 6, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 10, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Monitoring response", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": 1, "Stability": 2, "FutureOptions": 2, "Total": 8, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 6, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Movement analytics", "NodeStatus": "Added", "Success": 2, "Risk": 0, "ResourceCost": -1, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 5, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 6, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Never know", "NodeStatus": "Existing", "Success": -1, "Risk": -3, "ResourceCost": 0, "TimeImpact": -1, "Stability": -2, "FutureOptions": 1, "Total": -6, "Classification": "Poor", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 7, "Level": 3, "LevelTheme": "Policy", "Shape": "Circle", "Node": "New models", "NodeStatus": "Existing", "Success": 2, "Risk": 0, "ResourceCost": -2, "TimeImpact": -1, "Stability": 0, "FutureOptions": 3, "Total": 2, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 10, "Level": 5, "LevelTheme": "Retention", "Shape": "Square", "Node": "Police", "NodeStatus": "Existing", "Success": 1, "Risk": 1, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 1, "Total": 3, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 2, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Policy", "NodeStatus": "Existing", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 2, "Total": 6, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 7, "Level": 1, "LevelTheme": "Information", "Shape": "Circle", "Node": "Product demand information", "NodeStatus": "Added", "Success": 2, "Risk": 1, "ResourceCost": 0, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 7, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Triangle", "Node": "Prototypes", "NodeStatus": "Existing", "Success": 1, "Risk": -1, "ResourceCost": -3, "TimeImpact": -2, "Stability": -1, "FutureOptions": 3, "Total": -3, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 4, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Residential privacy policy", "NodeStatus": "Added", "Success": 2, "Risk": 3, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 2, "Total": 7, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 6, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Circle", "Node": "Routine recognition", "NodeStatus": "Added", "Success": 1, "Risk": -1, "ResourceCost": -1, "TimeImpact": 1, "Stability": 0, "FutureOptions": 2, "Total": 2, "Classification": "Uncertain", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 8, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Social-network intelligence", "NodeStatus": "Added", "Success": 2, "Risk": 0, "ResourceCost": -1, "TimeImpact": 1, "Stability": 1, "FutureOptions": 2, "Total": 5, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 1, "Level": 3, "LevelTheme": "Policy", "Shape": "Triangle", "Node": "Surveillance policy", "NodeStatus": "Added", "Success": 2, "Risk": 2, "ResourceCost": -1, "TimeImpact": -1, "Stability": 2, "FutureOptions": 1, "Total": 5, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 12, "Level": 2, "LevelTheme": "Intelligence", "Shape": "Circle", "Node": "Workforce intelligence", "NodeStatus": "Added", "Success": 3, "Risk": 1, "ResourceCost": -1, "TimeImpact": 1, "Stability": 2, "FutureOptions": 3, "Total": 9, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}, {"ClockwisePosition": 12, "Level": 4, "LevelTheme": "Progress (10 years)", "Shape": "Square", "Node": "Workplace women", "NodeStatus": "Existing", "Success": 3, "Risk": 1, "ResourceCost": 0, "TimeImpact": 0, "Stability": 2, "FutureOptions": 3, "Total": 9, "Classification": "Good", "Control": "External control", "Colour": "Red", "Reason": "Primarily controlled by organisations/others"}];
+function byId(id){return document.getElementById(id)}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function sortedModel(){return [...MODEL].sort((a,b)=>(a.Level-b.Level)||(a.ClockwisePosition-b.ClockwisePosition))}
+function selectHTML(id,cls){
+  return `<select id="${id}" class="score ${cls}">
+    <option value="">—</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="NA">N/A</option>
+  </select>`;
+}
+function renderInventory(){
+  let item=0;
+  for(let level=1;level<=5;level++){
+    const host=byId("level"+level);
+    const group=sortedModel().filter(n=>n.Level===level);
+    host.innerHTML=group.map(n=>{
+      item++;
+      const idx=MODEL.indexOf(n);
+      return `<div class="scanrow">
+        <div><b>${item}.</b> ${esc(n.Node)} <span class="tag">P${n.ClockwisePosition} · ${esc(n.Shape)}</span></div>
+        ${selectHTML("a"+idx,"partyA")}
+        ${selectHTML("b"+idx,"partyB")}
+        ${selectHTML("c"+idx,"partyC")}
+        <select id="conf${idx}" class="conf"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+      </div>`;
+    }).join("");
+  }
+}
+function val(id){
+  const v=byId(id).value;
+  return v==="NA"||v===""?null:Number(v);
+}
+function mean(arr){
+  const x=arr.filter(v=>v!=null);
+  return x.length?x.reduce((a,b)=>a+b,0)/x.length:null;
+}
+function collect(){
+  const answers={};
+  MODEL.forEach((n,i)=>answers[i]={A:byId("a"+i).value||null,B:byId("b"+i).value||null,C:byId("c"+i).value||null,confidence:byId("conf"+i).value||null});
+  return {
+    chosenOption:byId("chosenOption").value,decision:byId("decision").value,horizon:byId("horizon").value,notes:byId("notes").value,
+    partyAName:byId("partyAName").value,partyBName:byId("partyBName").value,partyCName:byId("partyCName").value,facilitator:byId("facilitator").value,
+    minA:byId("minA").value,minB:byId("minB").value,minC:byId("minC").value,compromise:byId("compromise").value,answers
+  };
+}
+function scoreAssessment(){
+  const records=[];
+  const levelStats={};
+  let answeredCells=0;
+  MODEL.forEach((n,i)=>{
+    const A=val("a"+i),B=val("b"+i),C=val("c"+i),vals=[A,B,C].filter(v=>v!=null);
+    answeredCells+=vals.length;
+    const avg=mean(vals);
+    const gap=vals.length>=2?Math.max(...vals)-Math.min(...vals):null;
+    const min=vals.length?Math.min(...vals):null;
+    const consensus=vals.length===3&&min>=4;
+    const conflict=vals.length>=2&&gap>=2;
+    records.push({node:n.Node,level:n.Level,theme:n.LevelTheme,A,B,C,avg,gap,min,consensus,conflict,total:n.Total});
+    levelStats[n.Level]??={A:[],B:[],C:[],gaps:[],consensus:0,conflicts:0};
+    if(A!=null)levelStats[n.Level].A.push(A);
+    if(B!=null)levelStats[n.Level].B.push(B);
+    if(C!=null)levelStats[n.Level].C.push(C);
+    if(gap!=null)levelStats[n.Level].gaps.push(gap);
+    if(consensus)levelStats[n.Level].consensus++;
+    if(conflict)levelStats[n.Level].conflicts++;
+  });
+  const Amean=mean(records.map(r=>r.A)),Bmean=mean(records.map(r=>r.B)),Cmean=mean(records.map(r=>r.C));
+  const partyMeans=[Amean,Bmean,Cmean].filter(v=>v!=null);
+  const overall=mean(partyMeans);
+  const balanceGap=partyMeans.length>=2?Math.max(...partyMeans)-Math.min(...partyMeans):null;
+  const consensusCount=records.filter(r=>r.consensus).length;
+  const conflictCount=records.filter(r=>r.conflict).length;
+  const completion=Math.round(answeredCells/(MODEL.length*3)*100);
+  const status=overall==null?"Not scored":overall>=4&&balanceGap<=.75?"Balanced and satisfactory":overall>=3&&balanceGap<=1.25?"Mixed but workable":"High conflict or low satisfaction";
+  const cls=status==="Balanced and satisfactory"?"good":status==="Mixed but workable"?"mid":"poor";
+  const metrics=[
+    ["Completion",`${answeredCells}/180 (${completion}%)`,"Three ratings are possible for each of 60 nodes."],
+    ["Party A average",Amean==null?"—":Amean.toFixed(2),esc(byId("partyAName").value||"You")],
+    ["Party B average",Bmean==null?"—":Bmean.toFixed(2),esc(byId("partyBName").value||"Other party")],
+    ["Party C average",Cmean==null?"—":Cmean.toFixed(2),esc(byId("partyCName").value||"Third parties")],
+    ["Overall satisfaction",overall==null?"—":overall.toFixed(2),status],
+    ["Party balance gap",balanceGap==null?"—":balanceGap.toFixed(2),"Difference between highest and lowest party average."],
+    ["Strong-consensus nodes",consensusCount,"All three parties rated 4 or 5."],
+    ["Conflict nodes",conflictCount,"At least a two-point gap between parties."]
+  ];
+  byId("metrics").innerHTML=metrics.map((m,i)=>`<div class="metric"><b>${m[0]}</b><span class="pill ${i===4?cls:""}">${m[1]}</span><span>${m[2]}</span></div>`).join("");
+  byId("levelResults").innerHTML=`<table class="smalltable"><thead><tr><th>Level</th><th>Theme</th><th>Party A</th><th>Party B</th><th>Party C</th><th>Mean gap</th><th>Consensus</th><th>Conflicts</th></tr></thead><tbody>${
+    Object.keys(levelStats).map(k=>{
+      const s=levelStats[k];
+      return `<tr><td>${k}</td><td>${esc(MODEL.find(n=>n.Level==k).LevelTheme)}</td><td>${fmt(mean(s.A))}</td><td>${fmt(mean(s.B))}</td><td>${fmt(mean(s.C))}</td><td>${fmt(mean(s.gaps))}</td><td>${s.consensus}</td><td>${s.conflicts}</td></tr>`;
+    }).join("")
+  }</tbody></table>`;
+  const consensus=records.filter(r=>r.consensus).sort((a,b)=>(b.avg-a.avg)||(a.gap-b.gap)).slice(0,8);
+  const conflicts=records.filter(r=>r.conflict).sort((a,b)=>(b.gap-a.gap)||((a.avg??9)-(b.avg??9))).slice(0,8);
+  const vulnerable=records.filter(r=>r.min!=null).sort((a,b)=>(a.min-b.min)||((a.avg??9)-(b.avg??9))).slice(0,8);
+  byId("drivers").innerHTML=`<div class="driverGrid">
+    <div class="driverCard"><h3>Consensus strengths</h3><ul>${consensus.length?consensus.map(r=>`<li>${esc(r.node)} (${r.avg.toFixed(1)})</li>`).join(""):"<li>None yet</li>"}</ul></div>
+    <div class="driverCard"><h3>Largest conflicts</h3><ul>${conflicts.length?conflicts.map(r=>`<li>${esc(r.node)} (gap ${r.gap})</li>`).join(""):"<li>None yet</li>"}</ul></div>
+    <div class="driverCard"><h3>Lowest-party safeguards</h3><ul>${vulnerable.length?vulnerable.map(r=>`<li>${esc(r.node)} (minimum ${r.min})</li>`).join(""):"<li>None yet</li>"}</ul></div>
+  </div>`;
+  const lowParty=partyMeans.length===3?[["Party A",Amean],["Party B",Bmean],["Party C",Cmean]].sort((x,y)=>x[1]-y[1])[0]:null;
+  byId("interpretation").innerHTML=`
+    <p><b>Overall finding:</b> <span class="pill ${cls}">${status}</span></p>
+    <p>${overall==null?"Complete more ratings to interpret the result.":`The combined satisfaction average is <b>${overall.toFixed(2)}</b> out of 5. The average gap between the most and least satisfied party is <b>${balanceGap.toFixed(2)}</b>.`}</p>
+    <p>${lowParty?`The currently least-satisfied group is <b>${lowParty[0]}</b> with an average of <b>${lowParty[1].toFixed(2)}</b>. Review its minimum acceptable outcome and the conflict nodes before treating the arrangement as jointly acceptable.`:""}</p>
+    <p><b>Decision rule:</b> Do not treat a high overall average as sufficient when one party scores important nodes at 1 or 2. Add a safeguard, compensation, consent condition, review point, or opt-out where feasible.</p>
+    <p><b>Interpretation limit:</b> The tool organizes stakeholder judgments. It does not establish legal rights, factual control, consent, or regulatory compliance.</p>`;
+  location.hash="results-page";
+}
+function fmt(v){return v==null?"—":v.toFixed(2)}
+function createDataBlock(){
+  const raw=JSON.stringify(collect());
+  const block="3P60-DATA:"+btoa(unescape(encodeURIComponent(raw)));
+  byId("dataBlock").value=block;alert("Data block created.");return block;
+}
+function importData(){
+  let raw=(byId("dataBlock").value||"").trim();
+  if(!raw)raw=prompt("Paste 3P60 data block")||"";
+  raw=raw.replace("3P60-DATA:","");
+  if(!raw)return;
+  try{
+    const d=JSON.parse(decodeURIComponent(escape(atob(raw))));
+    ["chosenOption","decision","horizon","notes","partyAName","partyBName","partyCName","facilitator","minA","minB","minC","compromise"].forEach(id=>{if(d[id]!=null)byId(id).value=d[id]});
+    Object.keys(d.answers||{}).forEach(k=>{
+      const a=d.answers[k];
+      if(a.A!=null)byId("a"+k).value=a.A;
+      if(a.B!=null)byId("b"+k).value=a.B;
+      if(a.C!=null)byId("c"+k).value=a.C;
+      if(a.confidence!=null)byId("conf"+k).value=a.confidence;
+    });
+    alert("Imported.");
+  }catch(e){alert("Import failed. Check the data block.")}
+}
+function clearAll(){
+  if(!confirm("Clear all responses?"))return;
+  document.querySelectorAll('input[type="text"],textarea').forEach(e=>e.value="");
+  document.querySelectorAll('select').forEach(e=>e.value="");
+  byId("metrics").innerHTML='Complete the inventory, then press <b>Score Test</b>.';
+  byId("levelResults").innerHTML="";byId("drivers").innerHTML="";byId("interpretation").textContent="No score calculated yet.";
+}
+renderInventory();
+</script>
+</body>
+</html>
